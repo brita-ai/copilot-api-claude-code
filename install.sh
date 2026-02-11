@@ -355,8 +355,55 @@ configure_claude_settings() {
         print_info "已备份原配置文件"
     fi
 
-    # 写入新配置
-    cat > "$SETTINGS_FILE" << EOF
+    # 需要设置的环境变量
+    declare -A NEW_ENV_VARS=(
+        ["ANTHROPIC_BASE_URL"]="http://localhost:4141"
+        ["ANTHROPIC_AUTH_TOKEN"]="dummy"
+        ["ANTHROPIC_MODEL"]="${SELECTED_MODEL}"
+        ["ANTHROPIC_DEFAULT_SONNET_MODEL"]="${SELECTED_MODEL}"
+        ["ANTHROPIC_SMALL_FAST_MODEL"]="${SELECTED_SMALL_MODEL}"
+        ["ANTHROPIC_DEFAULT_HAIKU_MODEL"]="${SELECTED_MODEL}"
+        ["DISABLE_NON_ESSENTIAL_MODEL_CALLS"]="1"
+        ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]="1"
+    )
+
+    # 检查是否有 jq
+    if command_exists jq; then
+        # 使用 jq 合并配置
+        if [[ -f "$SETTINGS_FILE" ]]; then
+            EXISTING_CONFIG=$(cat "$SETTINGS_FILE")
+        else
+            EXISTING_CONFIG='{}'
+        fi
+
+        # 构建要合并的 env 对象
+        NEW_ENV_JSON=$(cat << EOF
+{
+    "ANTHROPIC_BASE_URL": "http://localhost:4141",
+    "ANTHROPIC_AUTH_TOKEN": "dummy",
+    "ANTHROPIC_MODEL": "${SELECTED_MODEL}",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${SELECTED_MODEL}",
+    "ANTHROPIC_SMALL_FAST_MODEL": "${SELECTED_SMALL_MODEL}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_MODEL}",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+}
+EOF
+)
+
+        # 合并配置：保留原有配置，更新/添加 env 中的特定字段
+        echo "$EXISTING_CONFIG" | jq --argjson newenv "$NEW_ENV_JSON" '.env = ((.env // {}) + $newenv)' > "$SETTINGS_FILE"
+
+        print_success "已合并配置到: $SETTINGS_FILE"
+    else
+        # 没有 jq，使用简单的覆盖方式（但尝试保留其他顶级字段）
+        if [[ -f "$SETTINGS_FILE" ]]; then
+            # 尝试提取非 env 的其他字段（简单处理）
+            print_warning "未安装 jq，将覆盖 env 配置（其他配置已备份）"
+        fi
+
+        # 写入新配置
+        cat > "$SETTINGS_FILE" << EOF
 {
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:4141",
@@ -370,8 +417,9 @@ configure_claude_settings() {
   }
 }
 EOF
+        print_success "已写入配置: $SETTINGS_FILE"
+    fi
 
-    print_success "已写入配置: $SETTINGS_FILE"
     echo ""
     echo -e "  ${CYAN}主模型:${NC}   $SELECTED_MODEL"
     echo -e "  ${CYAN}轻量模型:${NC} $SELECTED_SMALL_MODEL"

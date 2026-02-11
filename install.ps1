@@ -290,23 +290,43 @@ function Configure-ClaudeSettings {
         Write-Info "已备份原配置文件"
     }
 
-    # 写入新配置
-    $settings = @{
-        env = @{
-            ANTHROPIC_BASE_URL = "http://localhost:4141"
-            ANTHROPIC_AUTH_TOKEN = "dummy"
-            ANTHROPIC_MODEL = $script:SelectedModel
-            ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
-            ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
-            ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedModel
-            DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
-            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+    # 需要设置的环境变量
+    $newEnvVars = @{
+        ANTHROPIC_BASE_URL = "http://localhost:4141"
+        ANTHROPIC_AUTH_TOKEN = "dummy"
+        ANTHROPIC_MODEL = $script:SelectedModel
+        ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
+        ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
+        ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedModel
+        DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+    }
+
+    # 读取现有配置并合并
+    $existingConfig = @{}
+    if (Test-Path $settingsFile) {
+        try {
+            $existingConfig = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable
+        } catch {
+            Write-Warn "无法解析现有配置，将创建新配置"
+            $existingConfig = @{}
         }
     }
 
-    $settings | ConvertTo-Json -Depth 10 | Out-File -FilePath $settingsFile -Encoding UTF8
+    # 确保 env 字段存在
+    if (-not $existingConfig.ContainsKey("env")) {
+        $existingConfig["env"] = @{}
+    }
 
-    Write-Success "已写入配置: $settingsFile"
+    # 合并环境变量（只更新需要的字段，保留其他字段）
+    foreach ($key in $newEnvVars.Keys) {
+        $existingConfig["env"][$key] = $newEnvVars[$key]
+    }
+
+    # 写入配置
+    $existingConfig | ConvertTo-Json -Depth 10 | Out-File -FilePath $settingsFile -Encoding UTF8
+
+    Write-Success "已合并配置到: $settingsFile"
     Write-Host ""
     Write-Host "  主模型:   $($script:SelectedModel)" -ForegroundColor Cyan
     Write-Host "  轻量模型: $($script:SelectedSmallModel)" -ForegroundColor Cyan
