@@ -225,16 +225,17 @@ select_models() {
     wait $TEMP_API_PID 2>/dev/null || true
 
     if [[ -z "$MODELS_JSON" ]] || [[ "$MODELS_JSON" == *"error"* ]]; then
-        print_warning "无法获取模型列表，使用默认配置"
-        return
+        print_error "无法获取模型列表，请检查 Copilot API 认证是否成功"
+        print_error "可尝试重新运行: npx copilot-api@latest auth"
+        exit 1
     fi
 
     # 解析模型列表
     MODEL_LIST=$(echo "$MODELS_JSON" | grep -o '"id":"[^"]*"' | sed 's/"id":"//g' | sed 's/"//g' | sort)
 
     if [[ -z "$MODEL_LIST" ]]; then
-        print_warning "模型列表为空，使用默认配置"
-        return
+        print_error "模型列表为空，请检查 Copilot API 服务是否正常"
+        exit 1
     fi
 
     # 转换为数组
@@ -329,7 +330,7 @@ configure_claude_settings() {
     "ANTHROPIC_MODEL": "${SELECTED_MODEL}",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "${SELECTED_MODEL}",
     "ANTHROPIC_SMALL_FAST_MODEL": "${SELECTED_SMALL_MODEL}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_SMALL_MODEL}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_MODEL}",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }

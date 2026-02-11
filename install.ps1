@@ -178,16 +178,19 @@ function Select-Models {
     } catch {}
 
     if ($null -eq $modelsJson -or $null -eq $modelsJson.data) {
-        Write-Warn "无法获取模型列表，使用默认配置"
-        return
+        Write-Err "无法获取模型列表，请检查 Copilot API 认证是否成功"
+        Write-Err "可尝试重新运行: npx copilot-api@latest auth"
+        Read-Host "按回车键退出"
+        exit 1
     }
 
     # 提取模型 ID
     $models = $modelsJson.data | ForEach-Object { $_.id } | Sort-Object
 
     if ($models.Count -eq 0) {
-        Write-Warn "模型列表为空，使用默认配置"
-        return
+        Write-Err "模型列表为空，请检查 Copilot API 服务是否正常"
+        Read-Host "按回车键退出"
+        exit 1
     }
 
     Write-Host ""
@@ -281,7 +284,7 @@ function Configure-ClaudeSettings {
             ANTHROPIC_MODEL = $script:SelectedModel
             ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
             ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
-            ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedSmallModel
+            ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedModel
             DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
             CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
         }

@@ -94,7 +94,7 @@ claude
     "ANTHROPIC_MODEL": "<你选择的主模型>",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "<你选择的主模型>",
     "ANTHROPIC_SMALL_FAST_MODEL": "<你选择的轻量模型>",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "<你选择的轻量模型>",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "<你选择的主模型>",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
@@ -138,9 +138,15 @@ kill -9 <PID>
 
 ### 模型列表获取失败
 
-如果无法获取模型列表，脚本会使用默认配置：
-- 主模型: `claude-sonnet-4-20250514`
-- 轻量模型: `gpt-4.1-mini`
+如果无法获取模型列表，安装流程会中断。请检查：
+
+1. Copilot API 认证是否成功
+2. 网络连接是否正常
+
+可尝试重新运行认证：
+```bash
+npx copilot-api@latest auth
+```
 
 ## 📚 相关项目
 
