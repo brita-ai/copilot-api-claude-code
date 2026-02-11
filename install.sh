@@ -278,14 +278,32 @@ select_models() {
     echo -e "用于主要的代码生成和对话任务"
     echo ""
 
-    # 查找默认选项
+    # 查找默认选项 (优先 claude-opus-4.6 > claude-opus-4.5 > claude-sonnet)
     default_main=1
     for idx in "${!MODELS_ARRAY[@]}"; do
-        if [[ "${MODELS_ARRAY[$idx]}" == *"claude"* ]] && [[ "${MODELS_ARRAY[$idx]}" == *"sonnet"* ]]; then
+        if [[ "${MODELS_ARRAY[$idx]}" == "claude-opus-4.6" ]]; then
             default_main=$((idx + 1))
             break
         fi
     done
+    # 如果没找到 opus-4.6，找 opus-4.5
+    if [[ $default_main -eq 1 ]]; then
+        for idx in "${!MODELS_ARRAY[@]}"; do
+            if [[ "${MODELS_ARRAY[$idx]}" == "claude-opus-4.5" ]]; then
+                default_main=$((idx + 1))
+                break
+            fi
+        done
+    fi
+    # 如果没找到 opus，找 sonnet
+    if [[ $default_main -eq 1 ]]; then
+        for idx in "${!MODELS_ARRAY[@]}"; do
+            if [[ "${MODELS_ARRAY[$idx]}" == *"claude"* ]] && [[ "${MODELS_ARRAY[$idx]}" == *"sonnet"* ]]; then
+                default_main=$((idx + 1))
+                break
+            fi
+        done
+    fi
 
     # 尝试从终端读取用户输入
     if [[ -t 0 ]] || [[ -e /dev/tty ]]; then
@@ -362,7 +380,7 @@ configure_claude_settings() {
     \"ANTHROPIC_MODEL\": \"${SELECTED_MODEL}\",
     \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${SELECTED_MODEL}\",
     \"ANTHROPIC_SMALL_FAST_MODEL\": \"${SELECTED_SMALL_MODEL}\",
-    \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${SELECTED_MODEL}\",
+    \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${SELECTED_SMALL_MODEL}\",
     \"DISABLE_NON_ESSENTIAL_MODEL_CALLS\": \"1\",
     \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\"
 }"
@@ -393,7 +411,7 @@ configure_claude_settings() {
     "ANTHROPIC_MODEL": "${SELECTED_MODEL}",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "${SELECTED_MODEL}",
     "ANTHROPIC_SMALL_FAST_MODEL": "${SELECTED_SMALL_MODEL}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_MODEL}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_SMALL_MODEL}",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
@@ -416,7 +434,7 @@ FALLBACK
     "ANTHROPIC_MODEL": "${SELECTED_MODEL}",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "${SELECTED_MODEL}",
     "ANTHROPIC_SMALL_FAST_MODEL": "${SELECTED_SMALL_MODEL}",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_MODEL}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_SMALL_MODEL}",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
@@ -462,7 +480,7 @@ init_claude_code() {
     export ANTHROPIC_MODEL="${SELECTED_MODEL}"
     export ANTHROPIC_DEFAULT_SONNET_MODEL="${SELECTED_MODEL}"
     export ANTHROPIC_SMALL_FAST_MODEL="${SELECTED_SMALL_MODEL}"
-    export ANTHROPIC_DEFAULT_HAIKU_MODEL="${SELECTED_MODEL}"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="${SELECTED_SMALL_MODEL}"
     export DISABLE_NON_ESSENTIAL_MODEL_CALLS="1"
     export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
 

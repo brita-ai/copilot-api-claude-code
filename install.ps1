@@ -222,12 +222,30 @@ function Select-Models {
     Write-Host "用于主要的代码生成和对话任务"
     Write-Host ""
 
-    # 查找默认选项
+    # 查找默认选项 (优先 claude-opus-4.6 > claude-opus-4.5 > claude-sonnet)
     $defaultMain = 1
     for ($i = 0; $i -lt $models.Count; $i++) {
-        if ($models[$i] -match "claude" -and $models[$i] -match "sonnet") {
+        if ($models[$i] -eq "claude-opus-4.6") {
             $defaultMain = $i + 1
             break
+        }
+    }
+    # 如果没找到 opus-4.6，找 opus-4.5
+    if ($defaultMain -eq 1) {
+        for ($i = 0; $i -lt $models.Count; $i++) {
+            if ($models[$i] -eq "claude-opus-4.5") {
+                $defaultMain = $i + 1
+                break
+            }
+        }
+    }
+    # 如果没找到 opus，找 sonnet
+    if ($defaultMain -eq 1) {
+        for ($i = 0; $i -lt $models.Count; $i++) {
+            if ($models[$i] -match "claude" -and $models[$i] -match "sonnet") {
+                $defaultMain = $i + 1
+                break
+            }
         }
     }
 
@@ -297,7 +315,7 @@ function Configure-ClaudeSettings {
         ANTHROPIC_MODEL = $script:SelectedModel
         ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
         ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
-        ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedModel
+        ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedSmallModel
         DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
         CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
     }
@@ -370,7 +388,7 @@ function Init-ClaudeCode {
     $env:ANTHROPIC_MODEL = $script:SelectedModel
     $env:ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
     $env:ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
-    $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedModel
+    $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedSmallModel
     $env:DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
     $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
 
