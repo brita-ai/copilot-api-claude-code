@@ -142,7 +142,15 @@ function Select-Models {
     Write-Info "正在启动临时 Copilot API 服务以获取可用模型..."
 
     # 后台启动 copilot-api
-    $tempJob = Start-Process -FilePath "npx" -ArgumentList "copilot-api@latest", "start", "--port", "14141" -WindowStyle Hidden -PassThru
+    $tempJob = $null
+    try {
+        $tempJob = Start-Process -FilePath "npx" -ArgumentList "copilot-api@latest", "start", "--port", "14141" -WindowStyle Hidden -PassThru
+    } catch {
+        Write-Err "无法启动临时服务"
+        Write-Err "可尝试重新运行: npx copilot-api@latest auth"
+        Read-Host "按回车键退出"
+        exit 1
+    }
 
     # 等待服务启动
     Write-Host "  等待服务就绪" -NoNewline
@@ -159,7 +167,11 @@ function Select-Models {
             Write-Host "." -NoNewline
         }
     }
-    Write-Host ""
+
+    if (-not $ready) {
+        Write-Host ""
+        Write-Warn "服务启动超时"
+    }
 
     # 获取模型列表
     $modelsJson = $null
@@ -173,9 +185,11 @@ function Select-Models {
     }
 
     # 停止临时服务
-    try {
-        Stop-Process -Id $tempJob.Id -Force -ErrorAction SilentlyContinue
-    } catch {}
+    if ($null -ne $tempJob) {
+        try {
+            Stop-Process -Id $tempJob.Id -Force -ErrorAction SilentlyContinue
+        } catch {}
+    }
 
     if ($null -eq $modelsJson -or $null -eq $modelsJson.data) {
         Write-Err "无法获取模型列表，请检查 Copilot API 认证是否成功"

@@ -196,9 +196,20 @@ run_copilot_auth() {
     print_success "Copilot API 认证完成"
 }
 
+# 清理临时服务
+cleanup_temp_service() {
+    if [[ -n "$TEMP_API_PID" ]]; then
+        kill $TEMP_API_PID 2>/dev/null || true
+        wait $TEMP_API_PID 2>/dev/null || true
+    fi
+}
+
 # 获取可用模型并让用户选择
 select_models() {
     print_info "正在启动临时 Copilot API 服务以获取可用模型..."
+
+    # 确保退出时清理
+    trap cleanup_temp_service EXIT
 
     # 后台启动 copilot-api
     npx copilot-api@latest start --port 14141 > /tmp/copilot-api-temp.log 2>&1 &
@@ -206,23 +217,29 @@ select_models() {
 
     # 等待服务启动
     echo -n "  等待服务就绪"
+    SERVICE_READY=false
     for i in {1..30}; do
         if curl -s http://localhost:14141/v1/models > /dev/null 2>&1; then
             echo ""
             print_success "服务已就绪"
+            SERVICE_READY=true
             break
         fi
         echo -n "."
         sleep 1
     done
-    echo ""
+
+    if [[ "$SERVICE_READY" != "true" ]]; then
+        echo ""
+        print_error "服务启动超时"
+    fi
 
     # 获取模型列表
     MODELS_JSON=$(curl -s http://localhost:14141/v1/models 2>/dev/null)
 
     # 停止临时服务
-    kill $TEMP_API_PID 2>/dev/null || true
-    wait $TEMP_API_PID 2>/dev/null || true
+    cleanup_temp_service
+    trap - EXIT  # 清除 trap
 
     if [[ -z "$MODELS_JSON" ]] || [[ "$MODELS_JSON" == *"error"* ]]; then
         print_error "无法获取模型列表，请检查 Copilot API 认证是否成功"
@@ -230,7 +247,7 @@ select_models() {
         exit 1
     fi
 
-    # 解析模型列表
+    # 解析模型列表 - 使用更健壮的方式
     MODEL_LIST=$(echo "$MODELS_JSON" | grep -o '"id":"[^"]*"' | sed 's/"id":"//g' | sed 's/"//g' | sort)
 
     if [[ -z "$MODEL_LIST" ]]; then
@@ -238,15 +255,18 @@ select_models() {
         exit 1
     fi
 
-    # 转换为数组
-    IFS=$'\n' read -r -d '' -a MODELS_ARRAY <<< "$MODEL_LIST" || true
+    # 转换为数组 - 使用更兼容的方式
+    MODELS_ARRAY=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && MODELS_ARRAY+=("$line")
+    done <<< "$MODEL_LIST"
 
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}可用模型列表:${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-    local i=1
+    i=1
     for model in "${MODELS_ARRAY[@]}"; do
         echo "  $i) $model"
         ((i++))
@@ -259,7 +279,7 @@ select_models() {
     echo ""
 
     # 查找默认选项
-    local default_main=1
+    default_main=1
     for idx in "${!MODELS_ARRAY[@]}"; do
         if [[ "${MODELS_ARRAY[$idx]}" == *"claude"* ]] && [[ "${MODELS_ARRAY[$idx]}" == *"sonnet"* ]]; then
             default_main=$((idx + 1))
@@ -267,7 +287,7 @@ select_models() {
         fi
     done
 
-    read -p "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): " main_choice
+    read -r -p "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): " main_choice
     main_choice=${main_choice:-$default_main}
 
     if [[ "$main_choice" =~ ^[0-9]+$ ]] && [[ "$main_choice" -ge 1 ]] && [[ "$main_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
@@ -283,7 +303,7 @@ select_models() {
     echo ""
 
     # 查找默认选项 (优先选择 gpt-4.1-mini 或类似的轻量模型)
-    local default_small=1
+    default_small=1
     for idx in "${!MODELS_ARRAY[@]}"; do
         if [[ "${MODELS_ARRAY[$idx]}" == *"mini"* ]] || [[ "${MODELS_ARRAY[$idx]}" == *"haiku"* ]]; then
             default_small=$((idx + 1))
@@ -291,7 +311,7 @@ select_models() {
         fi
     done
 
-    read -p "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): " small_choice
+    read -r -p "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): " small_choice
     small_choice=${small_choice:-$default_small}
 
     if [[ "$small_choice" =~ ^[0-9]+$ ]] && [[ "$small_choice" -ge 1 ]] && [[ "$small_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
