@@ -377,14 +377,14 @@ configure_claude_settings() {
         fi
 
         # 合并配置：保留原有配置，更新/添加 env 中的特定字段
-        echo "$EXISTING_CONFIG" | jq --argjson newenv "$NEW_ENV_JSON" '.env = ((.env // {}) + $newenv)' > "$SETTINGS_FILE" 2>/dev/null
+        MERGED_CONFIG=$(echo "$EXISTING_CONFIG" | jq --argjson newenv "$NEW_ENV_JSON" '.env = ((.env // {}) + $newenv)' 2>/dev/null) || MERGED_CONFIG=""
 
-        if [[ $? -eq 0 ]]; then
+        if [[ -n "$MERGED_CONFIG" ]]; then
+            echo "$MERGED_CONFIG" > "$SETTINGS_FILE"
             print_success "已合并配置到: $SETTINGS_FILE"
         else
             print_warning "jq 合并失败，使用覆盖方式"
             # 回退到覆盖方式
-            echo "{\"env\": $NEW_ENV_JSON}" | jq '.' > "$SETTINGS_FILE" 2>/dev/null || \
             cat > "$SETTINGS_FILE" << FALLBACK
 {
   "env": {
