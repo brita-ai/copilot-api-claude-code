@@ -287,7 +287,7 @@ select_models() {
         fi
     done
 
-    read -r -p "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): " main_choice
+    read -r -p "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): " main_choice < /dev/tty
     main_choice=${main_choice:-$default_main}
 
     if [[ "$main_choice" =~ ^[0-9]+$ ]] && [[ "$main_choice" -ge 1 ]] && [[ "$main_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
@@ -311,7 +311,7 @@ select_models() {
         fi
     done
 
-    read -r -p "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): " small_choice
+    read -r -p "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): " small_choice < /dev/tty
     small_choice=${small_choice:-$default_small}
 
     if [[ "$small_choice" =~ ^[0-9]+$ ]] && [[ "$small_choice" -ge 1 ]] && [[ "$small_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
