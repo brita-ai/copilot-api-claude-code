@@ -10,6 +10,10 @@ function Write-Success { param($Message) Write-Host "[SUCCESS] $Message" -Foregr
 function Write-Warn { param($Message) Write-Host "[WARNING] $Message" -ForegroundColor Yellow }
 function Write-Err { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
+# 默认模型配置
+$script:SelectedModel = "claude-sonnet-4-20250514"
+$script:SelectedSmallModel = "gpt-4.1-mini"
+
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "   Copilot API + Claude Code 一键安装脚本"
@@ -122,6 +126,133 @@ function Install-ClaudeCode {
     }
 }
 
+# 运行 Copilot API 认证
+function Run-CopilotAuth {
+    Write-Info "正在运行 copilot-api 认证..."
+    Write-Host ""
+    Write-Host "请按照提示完成 GitHub Copilot 认证" -ForegroundColor Yellow
+    Write-Host ""
+    npx copilot-api@latest auth
+    Write-Host ""
+    Write-Success "Copilot API 认证完成"
+}
+
+# 获取可用模型并让用户选择
+function Select-Models {
+    Write-Info "正在启动临时 Copilot API 服务以获取可用模型..."
+
+    # 后台启动 copilot-api
+    $tempJob = Start-Process -FilePath "npx" -ArgumentList "copilot-api@latest", "start", "--port", "14141" -WindowStyle Hidden -PassThru
+
+    # 等待服务启动
+    Write-Host "  等待服务就绪" -NoNewline
+    $ready = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:14141/v1/models" -TimeoutSec 2 -ErrorAction SilentlyContinue
+            Write-Host ""
+            Write-Success "服务已就绪"
+            $ready = $true
+            break
+        } catch {
+            Write-Host "." -NoNewline
+        }
+    }
+    Write-Host ""
+
+    # 获取模型列表
+    $modelsJson = $null
+    if ($ready) {
+        try {
+            $response = Invoke-WebRequest -Uri "http://localhost:14141/v1/models" -TimeoutSec 5
+            $modelsJson = $response.Content | ConvertFrom-Json
+        } catch {
+            Write-Warn "获取模型列表失败"
+        }
+    }
+
+    # 停止临时服务
+    try {
+        Stop-Process -Id $tempJob.Id -Force -ErrorAction SilentlyContinue
+    } catch {}
+
+    if ($null -eq $modelsJson -or $null -eq $modelsJson.data) {
+        Write-Warn "无法获取模型列表，使用默认配置"
+        return
+    }
+
+    # 提取模型 ID
+    $models = $modelsJson.data | ForEach-Object { $_.id } | Sort-Object
+
+    if ($models.Count -eq 0) {
+        Write-Warn "模型列表为空，使用默认配置"
+        return
+    }
+
+    Write-Host ""
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host "可用模型列表:" -ForegroundColor Yellow
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+
+    for ($i = 0; $i -lt $models.Count; $i++) {
+        Write-Host "  $($i + 1)) $($models[$i])"
+    }
+    Write-Host ""
+
+    # 选择主模型
+    Write-Host "【选择主模型 (MODEL)】" -ForegroundColor Green
+    Write-Host "用于主要的代码生成和对话任务"
+    Write-Host ""
+
+    # 查找默认选项
+    $defaultMain = 1
+    for ($i = 0; $i -lt $models.Count; $i++) {
+        if ($models[$i] -match "claude" -and $models[$i] -match "sonnet") {
+            $defaultMain = $i + 1
+            break
+        }
+    }
+
+    $mainChoice = Read-Host "请选择主模型 [1-$($models.Count)] (默认: $defaultMain)"
+    if ([string]::IsNullOrEmpty($mainChoice)) {
+        $mainChoice = $defaultMain
+    }
+
+    if ($mainChoice -match '^\d+$' -and [int]$mainChoice -ge 1 -and [int]$mainChoice -le $models.Count) {
+        $script:SelectedModel = $models[[int]$mainChoice - 1]
+    }
+
+    Write-Success "已选择主模型: $($script:SelectedModel)"
+    Write-Host ""
+
+    # 选择轻量模型
+    Write-Host "【选择轻量模型 (SMALL_FAST_MODEL)】" -ForegroundColor Green
+    Write-Host "用于快速任务，如文件摘要、简单查询等"
+    Write-Host ""
+
+    # 查找默认选项
+    $defaultSmall = 1
+    for ($i = 0; $i -lt $models.Count; $i++) {
+        if ($models[$i] -match "mini" -or $models[$i] -match "haiku") {
+            $defaultSmall = $i + 1
+            break
+        }
+    }
+
+    $smallChoice = Read-Host "请选择轻量模型 [1-$($models.Count)] (默认: $defaultSmall)"
+    if ([string]::IsNullOrEmpty($smallChoice)) {
+        $smallChoice = $defaultSmall
+    }
+
+    if ($smallChoice -match '^\d+$' -and [int]$smallChoice -ge 1 -and [int]$smallChoice -le $models.Count) {
+        $script:SelectedSmallModel = $models[[int]$smallChoice - 1]
+    }
+
+    Write-Success "已选择轻量模型: $($script:SelectedSmallModel)"
+    Write-Host ""
+}
+
 # 配置 Claude Code settings.json
 function Configure-ClaudeSettings {
     Write-Info "配置 Claude Code settings.json..."
@@ -147,10 +278,10 @@ function Configure-ClaudeSettings {
         env = @{
             ANTHROPIC_BASE_URL = "http://localhost:4141"
             ANTHROPIC_AUTH_TOKEN = "dummy"
-            ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
-            ANTHROPIC_DEFAULT_SONNET_MODEL = "claude-sonnet-4-20250514"
-            ANTHROPIC_SMALL_FAST_MODEL = "gpt-4.1-mini"
-            ANTHROPIC_DEFAULT_HAIKU_MODEL = "gpt-4.1-mini"
+            ANTHROPIC_MODEL = $script:SelectedModel
+            ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
+            ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
+            ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedSmallModel
             DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
             CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
         }
@@ -159,17 +290,9 @@ function Configure-ClaudeSettings {
     $settings | ConvertTo-Json -Depth 10 | Out-File -FilePath $settingsFile -Encoding UTF8
 
     Write-Success "已写入配置: $settingsFile"
-}
-
-# 运行 Copilot API 认证
-function Run-CopilotAuth {
-    Write-Info "正在运行 copilot-api 认证..."
     Write-Host ""
-    Write-Host "请按照提示完成 GitHub Copilot 认证" -ForegroundColor Yellow
-    Write-Host ""
-    npx copilot-api@latest auth
-    Write-Host ""
-    Write-Success "Copilot API 认证完成"
+    Write-Host "  主模型:   $($script:SelectedModel)" -ForegroundColor Cyan
+    Write-Host "  轻量模型: $($script:SelectedSmallModel)" -ForegroundColor Cyan
 }
 
 # 显示总结
@@ -189,6 +312,10 @@ function Show-Summary {
     Write-Host ""
     Write-Host "          claude" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "【模型配置】" -ForegroundColor Yellow
+    Write-Host "  主模型:   $($script:SelectedModel)" -ForegroundColor Cyan
+    Write-Host "  轻量模型: $($script:SelectedSmallModel)" -ForegroundColor Cyan
+    Write-Host ""
     Write-Host "【配置文件】" -ForegroundColor Yellow
     Write-Host "  $env:USERPROFILE\.claude\settings.json"
     Write-Host ""
@@ -205,37 +332,44 @@ function Main {
 
     # 步骤 1: 安装 Node.js
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 1/5: 安装 Node.js"
+    Write-Info "步骤 1/6: 安装 Node.js"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Install-NodeJS
     Write-Host ""
 
     # 步骤 2: 验证 npx
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 2/5: 验证 npx"
+    Write-Info "步骤 2/6: 验证 npx"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Verify-Npx
     Write-Host ""
 
     # 步骤 3: 安装 Claude Code
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 3/5: 安装 Claude Code"
+    Write-Info "步骤 3/6: 安装 Claude Code"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Install-ClaudeCode
     Write-Host ""
 
-    # 步骤 4: 配置 Claude Code settings.json
+    # 步骤 4: 运行 Copilot API 认证
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 4/5: 配置 Claude Code settings.json"
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Configure-ClaudeSettings
-    Write-Host ""
-
-    # 步骤 5: 运行 Copilot API 认证
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 5/5: 运行 Copilot API 认证"
+    Write-Info "步骤 4/6: 运行 Copilot API 认证"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Run-CopilotAuth
+    Write-Host ""
+
+    # 步骤 5: 选择模型
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Info "步骤 5/6: 选择模型"
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Select-Models
+    Write-Host ""
+
+    # 步骤 6: 配置 Claude Code settings.json
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Info "步骤 6/6: 配置 Claude Code settings.json"
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Configure-ClaudeSettings
     Write-Host ""
 
     # 显示总结

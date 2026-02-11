@@ -31,6 +31,10 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# 默认模型配置
+SELECTED_MODEL="claude-sonnet-4-20250514"
+SELECTED_SMALL_MODEL="gpt-4.1-mini"
+
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║     Copilot API + Claude Code 一键安装脚本                 ║${NC}"
@@ -181,6 +185,122 @@ install_claude_code() {
     fi
 }
 
+# 运行 copilot-api 认证
+run_copilot_auth() {
+    print_info "正在运行 copilot-api 认证..."
+    echo ""
+    echo -e "${YELLOW}请按照提示完成 GitHub Copilot 认证${NC}"
+    echo ""
+    npx copilot-api@latest auth
+    echo ""
+    print_success "Copilot API 认证完成"
+}
+
+# 获取可用模型并让用户选择
+select_models() {
+    print_info "正在启动临时 Copilot API 服务以获取可用模型..."
+
+    # 后台启动 copilot-api
+    npx copilot-api@latest start --port 14141 > /tmp/copilot-api-temp.log 2>&1 &
+    TEMP_API_PID=$!
+
+    # 等待服务启动
+    echo -n "  等待服务就绪"
+    for i in {1..30}; do
+        if curl -s http://localhost:14141/v1/models > /dev/null 2>&1; then
+            echo ""
+            print_success "服务已就绪"
+            break
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo ""
+
+    # 获取模型列表
+    MODELS_JSON=$(curl -s http://localhost:14141/v1/models 2>/dev/null)
+
+    # 停止临时服务
+    kill $TEMP_API_PID 2>/dev/null || true
+    wait $TEMP_API_PID 2>/dev/null || true
+
+    if [[ -z "$MODELS_JSON" ]] || [[ "$MODELS_JSON" == *"error"* ]]; then
+        print_warning "无法获取模型列表，使用默认配置"
+        return
+    fi
+
+    # 解析模型列表
+    MODEL_LIST=$(echo "$MODELS_JSON" | grep -o '"id":"[^"]*"' | sed 's/"id":"//g' | sed 's/"//g' | sort)
+
+    if [[ -z "$MODEL_LIST" ]]; then
+        print_warning "模型列表为空，使用默认配置"
+        return
+    fi
+
+    # 转换为数组
+    IFS=$'\n' read -r -d '' -a MODELS_ARRAY <<< "$MODEL_LIST" || true
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}可用模型列表:${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    local i=1
+    for model in "${MODELS_ARRAY[@]}"; do
+        echo "  $i) $model"
+        ((i++))
+    done
+    echo ""
+
+    # 选择主模型 (MODEL)
+    echo -e "${GREEN}【选择主模型 (MODEL)】${NC}"
+    echo -e "用于主要的代码生成和对话任务"
+    echo ""
+
+    # 查找默认选项
+    local default_main=1
+    for idx in "${!MODELS_ARRAY[@]}"; do
+        if [[ "${MODELS_ARRAY[$idx]}" == *"claude"* ]] && [[ "${MODELS_ARRAY[$idx]}" == *"sonnet"* ]]; then
+            default_main=$((idx + 1))
+            break
+        fi
+    done
+
+    read -p "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): " main_choice
+    main_choice=${main_choice:-$default_main}
+
+    if [[ "$main_choice" =~ ^[0-9]+$ ]] && [[ "$main_choice" -ge 1 ]] && [[ "$main_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
+        SELECTED_MODEL="${MODELS_ARRAY[$((main_choice - 1))]}"
+    fi
+
+    print_success "已选择主模型: $SELECTED_MODEL"
+    echo ""
+
+    # 选择轻量模型 (SMALL_FAST_MODEL)
+    echo -e "${GREEN}【选择轻量模型 (SMALL_FAST_MODEL)】${NC}"
+    echo -e "用于快速任务，如文件摘要、简单查询等"
+    echo ""
+
+    # 查找默认选项 (优先选择 gpt-4.1-mini 或类似的轻量模型)
+    local default_small=1
+    for idx in "${!MODELS_ARRAY[@]}"; do
+        if [[ "${MODELS_ARRAY[$idx]}" == *"mini"* ]] || [[ "${MODELS_ARRAY[$idx]}" == *"haiku"* ]]; then
+            default_small=$((idx + 1))
+            break
+        fi
+    done
+
+    read -p "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): " small_choice
+    small_choice=${small_choice:-$default_small}
+
+    if [[ "$small_choice" =~ ^[0-9]+$ ]] && [[ "$small_choice" -ge 1 ]] && [[ "$small_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
+        SELECTED_SMALL_MODEL="${MODELS_ARRAY[$((small_choice - 1))]}"
+    fi
+
+    print_success "已选择轻量模型: $SELECTED_SMALL_MODEL"
+    echo ""
+}
+
 # 配置 Claude Code settings.json
 configure_claude_settings() {
     print_info "配置 Claude Code settings.json..."
@@ -201,15 +321,15 @@ configure_claude_settings() {
     fi
 
     # 写入新配置
-    cat > "$SETTINGS_FILE" << 'EOF'
+    cat > "$SETTINGS_FILE" << EOF
 {
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:4141",
     "ANTHROPIC_AUTH_TOKEN": "dummy",
-    "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-20250514",
-    "ANTHROPIC_SMALL_FAST_MODEL": "gpt-4.1-mini",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-4.1-mini",
+    "ANTHROPIC_MODEL": "${SELECTED_MODEL}",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "${SELECTED_MODEL}",
+    "ANTHROPIC_SMALL_FAST_MODEL": "${SELECTED_SMALL_MODEL}",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_SMALL_MODEL}",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
@@ -217,17 +337,9 @@ configure_claude_settings() {
 EOF
 
     print_success "已写入配置: $SETTINGS_FILE"
-}
-
-# 运行 copilot-api 认证
-run_copilot_auth() {
-    print_info "正在运行 copilot-api 认证..."
     echo ""
-    echo -e "${YELLOW}请按照提示完成 GitHub Copilot 认证${NC}"
-    echo ""
-    npx copilot-api@latest auth
-    echo ""
-    print_success "Copilot API 认证完成"
+    echo -e "  ${CYAN}主模型:${NC}   $SELECTED_MODEL"
+    echo -e "  ${CYAN}轻量模型:${NC} $SELECTED_SMALL_MODEL"
 }
 
 # 显示最终信息
@@ -247,6 +359,10 @@ show_summary() {
     echo ""
     echo -e "          ${CYAN}claude${NC}"
     echo ""
+    echo -e "${YELLOW}【模型配置】${NC}"
+    echo -e "  主模型:   ${CYAN}${SELECTED_MODEL}${NC}"
+    echo -e "  轻量模型: ${CYAN}${SELECTED_SMALL_MODEL}${NC}"
+    echo ""
     echo -e "${YELLOW}【配置文件】${NC}"
     echo "  ~/.claude/settings.json"
     echo ""
@@ -265,37 +381,44 @@ main() {
 
     # 步骤 1: 安装 Node.js
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 1/5: 安装 Node.js"
+    print_info "步骤 1/6: 安装 Node.js"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     install_nodejs
     echo ""
 
     # 步骤 2: 验证 npx
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 2/5: 验证 npx"
+    print_info "步骤 2/6: 验证 npx"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     verify_npx
     echo ""
 
     # 步骤 3: 安装 Claude Code
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 3/5: 安装 Claude Code"
+    print_info "步骤 3/6: 安装 Claude Code"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     install_claude_code
     echo ""
 
-    # 步骤 4: 配置 Claude Code settings.json
+    # 步骤 4: 运行 Copilot API 认证
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 4/5: 配置 Claude Code settings.json"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    configure_claude_settings
-    echo ""
-
-    # 步骤 5: 运行 Copilot API 认证
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 5/5: 运行 Copilot API 认证"
+    print_info "步骤 4/6: 运行 Copilot API 认证"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     run_copilot_auth
+    echo ""
+
+    # 步骤 5: 选择模型
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    print_info "步骤 5/6: 选择模型"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    select_models
+    echo ""
+
+    # 步骤 6: 配置 Claude Code settings.json
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    print_info "步骤 6/6: 配置 Claude Code settings.json"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    configure_claude_settings
     echo ""
 
     # 显示总结
