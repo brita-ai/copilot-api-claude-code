@@ -287,7 +287,14 @@ select_models() {
         fi
     done
 
-    read -r -p "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): " main_choice < /dev/tty
+    # 尝试从终端读取用户输入
+    if [[ -t 0 ]] || [[ -e /dev/tty ]]; then
+        exec 3</dev/tty 2>/dev/null || exec 3<&0
+        printf "请选择主模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_main): "
+        read -r main_choice <&3 || main_choice=""
+    else
+        main_choice=""
+    fi
     main_choice=${main_choice:-$default_main}
 
     if [[ "$main_choice" =~ ^[0-9]+$ ]] && [[ "$main_choice" -ge 1 ]] && [[ "$main_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
@@ -311,7 +318,14 @@ select_models() {
         fi
     done
 
-    read -r -p "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): " small_choice < /dev/tty
+    # 尝试从终端读取用户输入
+    if [[ -t 0 ]] || [[ -e /dev/tty ]]; then
+        exec 3</dev/tty 2>/dev/null || exec 3<&0
+        printf "请选择轻量模型 [1-${#MODELS_ARRAY[@]}] (默认: $default_small): "
+        read -r small_choice <&3 || small_choice=""
+    else
+        small_choice=""
+    fi
     small_choice=${small_choice:-$default_small}
 
     if [[ "$small_choice" =~ ^[0-9]+$ ]] && [[ "$small_choice" -ge 1 ]] && [[ "$small_choice" -le "${#MODELS_ARRAY[@]}" ]]; then
