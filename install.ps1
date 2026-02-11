@@ -374,10 +374,11 @@ function Init-ClaudeCode {
     $env:DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
     $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
 
-    # 运行 claude --version 来触发初始化
+    # 运行 claude -p "hello" 来触发初始化
     if (Test-CommandExists "claude") {
         try {
-            claude --version 2>&1 | Out-Null
+            Write-Info "运行 Claude Code 初始化测试..."
+            claude -p "hello" 2>&1 | Out-Null
             Write-Success "Claude Code 初始化完成"
         } catch {
             Write-Warn "Claude Code 初始化可能未完成"

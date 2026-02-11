@@ -461,9 +461,10 @@ init_claude_code() {
     export DISABLE_NON_ESSENTIAL_MODEL_CALLS="1"
     export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
 
-    # 运行 claude --version 或 claude --help 来触发初始化
+    # 运行 claude -p "hello" 来触发初始化
     if command_exists claude; then
-        claude --version > /dev/null 2>&1 || true
+        print_info "运行 Claude Code 初始化测试..."
+        claude -p "hello" > /dev/null 2>&1 || true
         print_success "Claude Code 初始化完成"
     else
         print_warning "Claude Code 命令未找到，请重启终端后手动运行初始化"
