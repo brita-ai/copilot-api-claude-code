@@ -18,14 +18,8 @@
 
 ### macOS / Linux
 
-**方式一（推荐）：下载后执行**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/brita-ai/copilot-api-claude-code/main/install.sh -o /tmp/install.sh && bash /tmp/install.sh
-```
-
-**方式二：直接管道执行**
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/brita-ai/copilot-api-claude-code/main/install.sh)"
 ```
 
 ### Windows (PowerShell 管理员模式)
