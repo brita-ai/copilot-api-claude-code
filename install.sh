@@ -355,30 +355,39 @@ configure_claude_settings() {
         print_info "已备份原配置文件"
     fi
 
-    # 需要设置的环境变量
-    declare -A NEW_ENV_VARS=(
-        ["ANTHROPIC_BASE_URL"]="http://localhost:4141"
-        ["ANTHROPIC_AUTH_TOKEN"]="dummy"
-        ["ANTHROPIC_MODEL"]="${SELECTED_MODEL}"
-        ["ANTHROPIC_DEFAULT_SONNET_MODEL"]="${SELECTED_MODEL}"
-        ["ANTHROPIC_SMALL_FAST_MODEL"]="${SELECTED_SMALL_MODEL}"
-        ["ANTHROPIC_DEFAULT_HAIKU_MODEL"]="${SELECTED_MODEL}"
-        ["DISABLE_NON_ESSENTIAL_MODEL_CALLS"]="1"
-        ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]="1"
-    )
+    # 构建要写入的 env JSON
+    NEW_ENV_JSON="{
+    \"ANTHROPIC_BASE_URL\": \"http://localhost:4141\",
+    \"ANTHROPIC_AUTH_TOKEN\": \"dummy\",
+    \"ANTHROPIC_MODEL\": \"${SELECTED_MODEL}\",
+    \"ANTHROPIC_DEFAULT_SONNET_MODEL\": \"${SELECTED_MODEL}\",
+    \"ANTHROPIC_SMALL_FAST_MODEL\": \"${SELECTED_SMALL_MODEL}\",
+    \"ANTHROPIC_DEFAULT_HAIKU_MODEL\": \"${SELECTED_MODEL}\",
+    \"DISABLE_NON_ESSENTIAL_MODEL_CALLS\": \"1\",
+    \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\"
+}"
 
     # 检查是否有 jq
     if command_exists jq; then
         # 使用 jq 合并配置
         if [[ -f "$SETTINGS_FILE" ]]; then
-            EXISTING_CONFIG=$(cat "$SETTINGS_FILE")
+            EXISTING_CONFIG=$(cat "$SETTINGS_FILE" 2>/dev/null || echo '{}')
         else
             EXISTING_CONFIG='{}'
         fi
 
-        # 构建要合并的 env 对象
-        NEW_ENV_JSON=$(cat << EOF
+        # 合并配置：保留原有配置，更新/添加 env 中的特定字段
+        echo "$EXISTING_CONFIG" | jq --argjson newenv "$NEW_ENV_JSON" '.env = ((.env // {}) + $newenv)' > "$SETTINGS_FILE" 2>/dev/null
+
+        if [[ $? -eq 0 ]]; then
+            print_success "已合并配置到: $SETTINGS_FILE"
+        else
+            print_warning "jq 合并失败，使用覆盖方式"
+            # 回退到覆盖方式
+            echo "{\"env\": $NEW_ENV_JSON}" | jq '.' > "$SETTINGS_FILE" 2>/dev/null || \
+            cat > "$SETTINGS_FILE" << FALLBACK
 {
+  "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:4141",
     "ANTHROPIC_AUTH_TOKEN": "dummy",
     "ANTHROPIC_MODEL": "${SELECTED_MODEL}",
@@ -387,18 +396,14 @@ configure_claude_settings() {
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "${SELECTED_MODEL}",
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  }
 }
-EOF
-)
-
-        # 合并配置：保留原有配置，更新/添加 env 中的特定字段
-        echo "$EXISTING_CONFIG" | jq --argjson newenv "$NEW_ENV_JSON" '.env = ((.env // {}) + $newenv)' > "$SETTINGS_FILE"
-
-        print_success "已合并配置到: $SETTINGS_FILE"
+FALLBACK
+            print_success "已写入配置: $SETTINGS_FILE"
+        fi
     else
-        # 没有 jq，使用简单的覆盖方式（但尝试保留其他顶级字段）
+        # 没有 jq，使用简单的覆盖方式
         if [[ -f "$SETTINGS_FILE" ]]; then
-            # 尝试提取非 env 的其他字段（简单处理）
             print_warning "未安装 jq，将覆盖 env 配置（其他配置已备份）"
         fi
 
