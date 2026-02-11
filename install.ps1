@@ -332,6 +332,68 @@ function Configure-ClaudeSettings {
     Write-Host "  轻量模型: $($script:SelectedSmallModel)" -ForegroundColor Cyan
 }
 
+# 初始化 Claude Code（跳过登录）
+function Init-ClaudeCode {
+    Write-Info "初始化 Claude Code（跳过登录）..."
+
+    # 检查 Copilot API 服务是否在运行
+    $apiRunning = $false
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:4141/v1/models" -TimeoutSec 2 -ErrorAction SilentlyContinue
+        $apiRunning = $true
+    } catch {}
+
+    $initJob = $null
+    if (-not $apiRunning) {
+        Write-Info "启动临时 Copilot API 服务..."
+        $initJob = Start-Process -FilePath "npx" -ArgumentList "copilot-api@latest", "start", "--port", "4141" -WindowStyle Hidden -PassThru
+
+        # 等待服务启动
+        Write-Host "  等待服务就绪" -NoNewline
+        for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+                $response = Invoke-WebRequest -Uri "http://localhost:4141/v1/models" -TimeoutSec 2 -ErrorAction SilentlyContinue
+                Write-Host ""
+                Write-Success "服务已就绪"
+                break
+            } catch {
+                Write-Host "." -NoNewline
+            }
+        }
+        Write-Host ""
+    }
+
+    # 设置环境变量
+    $env:ANTHROPIC_BASE_URL = "http://localhost:4141"
+    $env:ANTHROPIC_AUTH_TOKEN = "dummy"
+    $env:ANTHROPIC_MODEL = $script:SelectedModel
+    $env:ANTHROPIC_DEFAULT_SONNET_MODEL = $script:SelectedModel
+    $env:ANTHROPIC_SMALL_FAST_MODEL = $script:SelectedSmallModel
+    $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = $script:SelectedModel
+    $env:DISABLE_NON_ESSENTIAL_MODEL_CALLS = "1"
+    $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+
+    # 运行 claude --version 来触发初始化
+    if (Test-CommandExists "claude") {
+        try {
+            claude --version 2>&1 | Out-Null
+            Write-Success "Claude Code 初始化完成"
+        } catch {
+            Write-Warn "Claude Code 初始化可能未完成"
+        }
+    } else {
+        Write-Warn "Claude Code 命令未找到，请重启 PowerShell 后手动运行初始化"
+    }
+
+    # 停止临时服务
+    if ($null -ne $initJob) {
+        try {
+            Stop-Process -Id $initJob.Id -Force -ErrorAction SilentlyContinue
+        } catch {}
+    }
+}
+
 # 显示总结
 function Show-Summary {
     Write-Host ""
@@ -369,44 +431,51 @@ function Main {
 
     # 步骤 1: 安装 Node.js
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 1/6: 安装 Node.js"
+    Write-Info "步骤 1/7: 安装 Node.js"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Install-NodeJS
     Write-Host ""
 
     # 步骤 2: 验证 npx
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 2/6: 验证 npx"
+    Write-Info "步骤 2/7: 验证 npx"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Verify-Npx
     Write-Host ""
 
     # 步骤 3: 安装 Claude Code
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 3/6: 安装 Claude Code"
+    Write-Info "步骤 3/7: 安装 Claude Code"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Install-ClaudeCode
     Write-Host ""
 
     # 步骤 4: 运行 Copilot API 认证
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 4/6: 运行 Copilot API 认证"
+    Write-Info "步骤 4/7: 运行 Copilot API 认证"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Run-CopilotAuth
     Write-Host ""
 
     # 步骤 5: 选择模型
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 5/6: 选择模型"
+    Write-Info "步骤 5/7: 选择模型"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Select-Models
     Write-Host ""
 
     # 步骤 6: 配置 Claude Code settings.json
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
-    Write-Info "步骤 6/6: 配置 Claude Code settings.json"
+    Write-Info "步骤 6/7: 配置 Claude Code settings.json"
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
     Configure-ClaudeSettings
+    Write-Host ""
+
+    # 步骤 7: 初始化 Claude Code
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Info "步骤 7/7: 初始化 Claude Code"
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Init-ClaudeCode
     Write-Host ""
 
     # 显示总结

@@ -40,6 +40,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; iwr -useb https://raw.githubus
 | 4 | 运行 Copilot API 认证（需要 GitHub 登录） |
 | 5 | **检测可用模型并让用户选择** |
 | 6 | 配置 `~/.claude/settings.json` |
+| 7 | **初始化 Claude Code（跳过登录）** |
 
 ### 模型选择
 

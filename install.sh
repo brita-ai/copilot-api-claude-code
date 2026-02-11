@@ -425,6 +425,57 @@ EOF
     echo -e "  ${CYAN}轻量模型:${NC} $SELECTED_SMALL_MODEL"
 }
 
+# 初始化 Claude Code（跳过登录）
+init_claude_code() {
+    print_info "初始化 Claude Code（跳过登录）..."
+
+    # 检查 Copilot API 服务是否在运行
+    if ! curl -s http://localhost:4141/v1/models > /dev/null 2>&1; then
+        print_info "启动临时 Copilot API 服务..."
+        npx copilot-api@latest start --port 4141 > /tmp/copilot-api-init.log 2>&1 &
+        INIT_API_PID=$!
+
+        # 等待服务启动
+        echo -n "  等待服务就绪"
+        for i in {1..30}; do
+            if curl -s http://localhost:4141/v1/models > /dev/null 2>&1; then
+                echo ""
+                print_success "服务已就绪"
+                break
+            fi
+            echo -n "."
+            sleep 1
+        done
+        echo ""
+    fi
+
+    # 通过环境变量运行 claude 进行初始化
+    print_info "正在初始化 Claude Code..."
+
+    export ANTHROPIC_BASE_URL="http://localhost:4141"
+    export ANTHROPIC_AUTH_TOKEN="dummy"
+    export ANTHROPIC_MODEL="${SELECTED_MODEL}"
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="${SELECTED_MODEL}"
+    export ANTHROPIC_SMALL_FAST_MODEL="${SELECTED_SMALL_MODEL}"
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="${SELECTED_MODEL}"
+    export DISABLE_NON_ESSENTIAL_MODEL_CALLS="1"
+    export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+
+    # 运行 claude --version 或 claude --help 来触发初始化
+    if command_exists claude; then
+        claude --version > /dev/null 2>&1 || true
+        print_success "Claude Code 初始化完成"
+    else
+        print_warning "Claude Code 命令未找到，请重启终端后手动运行初始化"
+    fi
+
+    # 停止临时服务
+    if [[ -n "$INIT_API_PID" ]]; then
+        kill $INIT_API_PID 2>/dev/null || true
+        wait $INIT_API_PID 2>/dev/null || true
+    fi
+}
+
 # 显示最终信息
 show_summary() {
     echo ""
@@ -464,44 +515,51 @@ main() {
 
     # 步骤 1: 安装 Node.js
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 1/6: 安装 Node.js"
+    print_info "步骤 1/7: 安装 Node.js"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     install_nodejs
     echo ""
 
     # 步骤 2: 验证 npx
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 2/6: 验证 npx"
+    print_info "步骤 2/7: 验证 npx"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     verify_npx
     echo ""
 
     # 步骤 3: 安装 Claude Code
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 3/6: 安装 Claude Code"
+    print_info "步骤 3/7: 安装 Claude Code"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     install_claude_code
     echo ""
 
     # 步骤 4: 运行 Copilot API 认证
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 4/6: 运行 Copilot API 认证"
+    print_info "步骤 4/7: 运行 Copilot API 认证"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     run_copilot_auth
     echo ""
 
     # 步骤 5: 选择模型
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 5/6: 选择模型"
+    print_info "步骤 5/7: 选择模型"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     select_models
     echo ""
 
     # 步骤 6: 配置 Claude Code settings.json
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    print_info "步骤 6/6: 配置 Claude Code settings.json"
+    print_info "步骤 6/7: 配置 Claude Code settings.json"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     configure_claude_settings
+    echo ""
+
+    # 步骤 7: 初始化 Claude Code
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    print_info "步骤 7/7: 初始化 Claude Code"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    init_claude_code
     echo ""
 
     # 显示总结
