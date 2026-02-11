@@ -5,7 +5,7 @@
 ## ✨ 特性
 
 - 🚀 一键安装所有依赖（Node.js、Claude Code、Copilot API）
-- ⚙️ 自动配置环境变量和 `~/.claude/settings.json`
+- ⚙️ 自动配置 `~/.claude/settings.json`
 - 🔐 使用 GitHub Copilot 订阅，无需 Anthropic 账号
 - 💻 支持 macOS、Linux、Windows
 
@@ -37,39 +37,29 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; iwr -useb https://raw.githubus
 | 2 | 验证 npx |
 | 3 | 安装 Claude Code |
 | 4 | 配置 `~/.claude/settings.json` |
-| 5 | 配置 Shell 环境变量 |
-| 6 | 运行 Copilot API 认证（需要 GitHub 登录） |
-| 7 | 创建启动脚本 |
+| 5 | 运行 Copilot API 认证（需要 GitHub 登录） |
 
 ## 🎯 使用方法
 
-### 推荐：一键启动
+安装完成后，按以下步骤使用：
+
+### 步骤 1: 启动 Copilot API 服务
 
 ```bash
-# macOS / Linux
-~/start-all.sh
-
-# 指定项目目录
-~/start-all.sh /path/to/your/project
+npx copilot-api@latest start
 ```
 
-**Windows**: 双击桌面的 **"Claude Code (一键启动)"** 图标
-
-### 分别启动
+### 步骤 2: 新开一个终端，运行 Claude Code
 
 ```bash
-# 启动 Copilot API
-~/start-copilot-api.sh
-
-# 启动 Claude Code
-~/start-claude-code.sh
+claude
 ```
+
+> **提示**: Copilot API 服务需要保持运行，服务地址: `http://localhost:4141`
 
 ## ⚙️ 配置说明
 
-安装完成后，以下配置会自动生效：
-
-### `~/.claude/settings.json`
+安装完成后，以下配置会自动写入 `~/.claude/settings.json`：
 
 ```json
 {
@@ -85,23 +75,6 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; iwr -useb https://raw.githubus
   }
 }
 ```
-
-### 环境变量
-
-| 变量 | 值 | 说明 |
-|------|-----|------|
-| `ANTHROPIC_BASE_URL` | `http://localhost:4141` | Copilot API 地址 |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-20250514` | 主模型 |
-| `ANTHROPIC_SMALL_FAST_MODEL` | `gpt-4.1-mini` | 轻量模型 |
-
-## 📁 生成的文件
-
-| 文件 | 说明 |
-|------|------|
-| `~/.claude/settings.json` | Claude Code 配置文件 |
-| `~/start-all.sh` | 一键启动脚本 |
-| `~/start-copilot-api.sh` | Copilot API 启动脚本 |
-| `~/start-claude-code.sh` | Claude Code 启动脚本 |
 
 ## 🔧 故障排除
 
